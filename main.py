@@ -2,60 +2,48 @@ import os
 import yt_dlp
 import asyncio
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, MessageHandler, filters, ContextTypes, CommandHandler
 
-# دالة معالجة الروابط وتحميل الفيديو
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# دالة الترحيب
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 أهلاً بك! أنا بوت تحميل الفيديوهات لعام 2026.\n\nأرسل لي رابط الفيديو (TikTok, YouTube, Insta) وسأقوم بتحميله لك فوراً.")
+
+# دالة التحميل والمعالجة
+async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
-    
-    # التأكد أن الرسالة تحتوي على رابط
     if not url.startswith("http"):
         return
 
     chat_id = update.message.chat_id
-    sent_message = await update.message.reply_text("⏳ جاري فحص الرابط وتحميل الفيديو... يرجى الانتظار.")
+    msg = await update.message.reply_text("⏳ جاري معالجة الرابط... انتظر قليلاً")
 
     try:
-        # إعدادات التحميل (أفضل جودة mp4)
-        file_path = f"{chat_id}_video.mp4"
+        file_path = f"{chat_id}_vid.mp4"
         ydl_opts = {
-            'format': 'best[ext=mp4]/best',
+            'format': 'best',
             'outtmpl': file_path,
             'quiet': True,
-            'no_warnings': True,
         }
-
-        # عملية التحميل باستخدام مكتبة yt-dlp المطورة
+        
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             await asyncio.to_thread(ydl.download, [url])
 
-        # إرسال الفيديو للمستخدم
         with open(file_path, 'rb') as video:
-            await update.message.reply_video(video=video, caption="✅ تم التحميل بنجاح بواسطة بوتك!")
+            await update.message.reply_video(video=video, caption="✅ تم التحميل بنجاح!")
         
-        # حذف الفيديو من السيرفر بعد الإرسال لتوفير المساحة
         os.remove(file_path)
-        await sent_message.delete()
-
+        await msg.delete()
     except Exception as e:
-        await sent_message.edit_text(f"❌ حدث خطأ أثناء التحميل: {str(e)}")
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        await msg.edit_text(f"❌ حدث خطأ: {str(e)}")
 
-# تشغيل البوت
 def main():
-    # سيقوم Render بسحب التوكن من Environment Variables
     token = os.environ.get("BOT_TOKEN")
-    if not token:
-        print("خطأ: لم يتم العثور على BOT_TOKEN!")
-        return
-
     app = Application.builder().token(token).build()
     
-    # معالجة أي نص يتم إرساله (روابط)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_video))
     
-    print("🚀 البوت يعمل الآن ومستعد للتحميل...")
+    print("Bot is running...")
     app.run_polling()
 
 if __name__ == '__main__':
